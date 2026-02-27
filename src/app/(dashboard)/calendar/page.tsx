@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ChevronLeft, ChevronRight, AlertTriangle, Filter } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, AlertTriangle, Filter, Download } from 'lucide-react';
 import { getAllDeadlines } from '@/lib/compliance/deadline-engine';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday } from 'date-fns';
 
@@ -22,6 +22,64 @@ export default function CalendarPage() {
   const [filterPillar, setFilterPillar] = useState<string>('all');
 
   const allDeadlines = useMemo(() => getAllDeadlines(), []);
+
+  const handleExportICal = useCallback(() => {
+    const escapeICalText = (text: string) =>
+      text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+
+    const events = allDeadlines.map((deadline) => {
+      const dtStart = format(deadline.date, 'yyyyMMdd');
+      // All-day event: DTEND is the next day
+      const nextDay = new Date(deadline.date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const dtEnd = format(nextDay, 'yyyyMMdd');
+
+      const pillarLabel = PILLAR_COLORS[deadline.pillar]?.label || deadline.pillar;
+      const description = escapeICalText(
+        `${deadline.description || ''}${deadline.description ? ' — ' : ''}Pillar: ${pillarLabel}`
+      );
+
+      return [
+        'BEGIN:VEVENT',
+        `DTSTART;VALUE=DATE:${dtStart}`,
+        `DTEND;VALUE=DATE:${dtEnd}`,
+        `SUMMARY:${escapeICalText(deadline.title)}`,
+        `DESCRIPTION:${description}`,
+        `UID:${deadline.id}@landlordshield.vercel.app`,
+        'BEGIN:VALARM',
+        'TRIGGER:-P7D',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'END:VALARM',
+        'BEGIN:VALARM',
+        'TRIGGER:-P1D',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'END:VALARM',
+        'END:VEVENT',
+      ].join('\r\n');
+    });
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//LandlordShield//Compliance Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      ...events,
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'landlordshield-deadlines.ics';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [allDeadlines]);
 
   const filteredDeadlines = useMemo(() => {
     if (filterPillar === 'all') return allDeadlines;
@@ -76,6 +134,10 @@ export default function CalendarPage() {
               <SelectItem value="certificate">Certificates</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={handleExportICal} className="ml-1">
+            <Download className="h-4 w-4 mr-1.5" />
+            Export to Calendar
+          </Button>
         </div>
       </div>
 

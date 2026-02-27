@@ -267,6 +267,8 @@ export default function PropertyDetailPage() {
       expiryDate: cert.expiry_date,
       provider: cert.provider,
       referenceNumber: cert.reference_number,
+      documentUrl: cert.document_url,
+      documentPath: cert.document_url,
     }));
   }, [property?.certificates]);
 
@@ -697,6 +699,8 @@ export default function PropertyDetailPage() {
           <CertificateTracker
             certificates={certificates}
             isHmo={property.hmo_licence_required}
+            userId={user?.id}
+            propertyId={propertyId}
           />
         </TabsContent>
 
