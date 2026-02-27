@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User, Bell, CreditCard, Download, Trash2, Save, Loader2, AlertTriangle, ExternalLink, LogOut, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import type { PlanType, SubscriptionStatus } from '@/types';
+import Link from 'next/link';
 
 interface NotificationPrefs {
   emailReminders: boolean;
@@ -39,8 +41,19 @@ export default function SettingsPage() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [subscription, setSubscription] = useState<{
+    plan: PlanType;
+    status: SubscriptionStatus;
+    stripeCustomerId: string | null;
+  }>({
+    plan: 'free',
+    status: 'inactive',
+    stripeCustomerId: null,
+  });
 
   const [profile, setProfile] = useState({
     name: '',
@@ -56,7 +69,7 @@ export default function SettingsPage() {
     const supabase = createClient();
     const { data, error: fetchErr } = await supabase
       .from('users')
-      .select('name, email, business_name, phone, settings')
+      .select('name, email, business_name, phone, settings, plan, subscription_status, stripe_customer_id')
       .eq('id', user.id)
       .single();
 
@@ -74,6 +87,12 @@ export default function SettingsPage() {
         email: data.email ?? user.email ?? '',
         businessName: data.business_name ?? '',
         phone: data.phone ?? '',
+      });
+
+      setSubscription({
+        plan: (data.plan as PlanType) ?? 'free',
+        status: (data.subscription_status as SubscriptionStatus) ?? 'inactive',
+        stripeCustomerId: data.stripe_customer_id ?? null,
       });
 
       // Load notification preferences from settings JSONB
@@ -171,8 +190,21 @@ export default function SettingsPage() {
     router.push('/');
   };
 
-  const handleManageBilling = () => {
-    alert('Billing management will be available once your subscription is active.');
+  const handleManageBilling = async () => {
+    setBillingLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || 'Failed to open billing portal');
+      }
+    } catch {
+      setError('Failed to open billing portal');
+    } finally {
+      setBillingLoading(false);
+    }
   };
 
   const handleExportData = async () => {
@@ -432,20 +464,68 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div>
               <div className="flex items-center gap-2">
-                <p className="font-semibold">Pro Plan</p>
-                <Badge className="bg-[#1E3A5F]">Active</Badge>
+                <p className="font-semibold">
+                  {subscription.plan === 'free' && 'Free Plan'}
+                  {subscription.plan === 'pro' && 'Pro Plan'}
+                  {subscription.plan === 'portfolio' && 'Portfolio Plan'}
+                </p>
+                {(() => {
+                  const s = subscription.status;
+                  if (s === 'active' || s === 'trialing') {
+                    return (
+                      <Badge className="bg-green-600 hover:bg-green-600 text-white">
+                        {s === 'trialing' ? 'Trialing' : 'Active'}
+                      </Badge>
+                    );
+                  }
+                  if (s === 'past_due') {
+                    return (
+                      <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+                        Past Due
+                      </Badge>
+                    );
+                  }
+                  // canceled or inactive
+                  return (
+                    <Badge className="bg-gray-400 hover:bg-gray-400 text-white">
+                      {s === 'canceled' ? 'Canceled' : 'Inactive'}
+                    </Badge>
+                  );
+                })()}
               </div>
-              <p className="text-sm text-gray-500 mt-1">{'\u00A3'}9.99/month &bull; Up to 10 properties</p>
-              <p className="text-xs text-gray-400 mt-0.5">Next billing date: 24 March 2026</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {subscription.plan === 'free' && `${'\u00A3'}0/month \u2022 1 property`}
+                {subscription.plan === 'pro' && `${'\u00A3'}9.99/month \u2022 Up to 10 properties`}
+                {subscription.plan === 'portfolio' && `${'\u00A3'}24.99/month \u2022 Unlimited properties`}
+              </p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleManageBilling}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Manage Billing
-            </Button>
+            {subscription.plan === 'free' ? (
+              <Link href="/pricing">
+                <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#2D4F7A]">
+                  Upgrade
+                </Button>
+              </Link>
+            ) : subscription.stripeCustomerId ? (
+              <Button variant="outline" size="sm" onClick={handleManageBilling} disabled={billingLoading}>
+                {billingLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                )}
+                Manage Billing
+              </Button>
+            ) : null}
           </div>
-          <p className="text-xs text-gray-500">
-            Billing is managed through Stripe. Click &quot;Manage Billing&quot; to update your payment method, view invoices, or cancel your subscription.
-          </p>
+          {subscription.plan !== 'free' && (
+            <p className="text-xs text-gray-500">
+              Billing is managed through Stripe. Click &quot;Manage Billing&quot; to update your payment method, view invoices, or cancel your subscription.
+            </p>
+          )}
+          {subscription.plan === 'free' && (
+            <p className="text-xs text-gray-500">
+              You are on the Free plan. Upgrade to Pro or Portfolio to unlock more properties, compliance reports, and email reminders.
+            </p>
+          )}
         </CardContent>
       </Card>
 

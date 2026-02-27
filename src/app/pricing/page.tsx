@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Shield, CheckCircle, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Shield, CheckCircle, ArrowLeft, AlertTriangle, Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const plans = [
   {
@@ -73,6 +75,81 @@ const plans = [
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  const handleSubscribe = async (planId: string) => {
+    if (loadingPlan) return;
+
+    // Free plan handling
+    if (planId === 'free') {
+      if (user) {
+        router.push('/dashboard');
+      } else {
+        router.push('/signup');
+      }
+      return;
+    }
+
+    // Paid plans: not logged in → redirect to signup
+    if (!user) {
+      router.push(`/signup?plan=${planId}`);
+      return;
+    }
+
+    // Paid plans: logged in → create Stripe checkout session
+    setLoadingPlan(planId);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: planId,
+          billing_period: isYearly ? 'yearly' : 'monthly',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const getButtonText = (plan: typeof plans[number]) => {
+    if (loadingPlan === plan.id) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          Please wait...
+        </>
+      );
+    }
+
+    if (plan.id === 'free') {
+      if (user) return 'Go to Dashboard';
+      return 'Get Started Free';
+    }
+
+    // Pro / Portfolio plans
+    if (user) {
+      return plan.trial ? 'Start 14-Day Free Trial' : 'Subscribe';
+    }
+
+    return plan.cta;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -85,12 +162,22 @@ export default function PricingPage() {
               <span className="text-lg font-bold text-[#1E3A5F]">LandlordShield</span>
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">Log in</Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#2D4F7A]">Sign up</Button>
-              </Link>
+              {authLoading ? (
+                <div className="h-8 w-20" />
+              ) : user ? (
+                <Link href="/dashboard">
+                  <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#2D4F7A]">Dashboard</Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button variant="ghost" size="sm">Log in</Button>
+                  </Link>
+                  <Link href="/signup">
+                    <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#2D4F7A]">Sign up</Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -165,14 +252,14 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href={`/signup?plan=${plan.id}`} className="block">
-                  <Button
-                    className={`w-full ${plan.popular ? 'bg-[#1E3A5F] hover:bg-[#2D4F7A]' : ''}`}
-                    variant={plan.popular ? 'default' : 'outline'}
-                  >
-                    {plan.cta}
-                  </Button>
-                </Link>
+                <Button
+                  className={`w-full ${plan.popular ? 'bg-[#1E3A5F] hover:bg-[#2D4F7A]' : ''}`}
+                  variant={plan.popular ? 'default' : 'outline'}
+                  disabled={loadingPlan === plan.id}
+                  onClick={() => handleSubscribe(plan.id)}
+                >
+                  {getButtonText(plan)}
+                </Button>
               </CardContent>
             </Card>
           ))}
