@@ -17,7 +17,7 @@ export async function sendDeadlineReminder(
   const pillarLabel = pillarLabels[deadline.pillar] || deadline.pillar;
 
   await resend.emails.send({
-    from: 'LandlordShield <reminders@landlordshield.co.uk>',
+    from: process.env.RESEND_FROM_EMAIL || 'LandlordShield <onboarding@resend.dev>',
     to,
     subject: `${deadline.daysLeft <= 0 ? 'OVERDUE' : `${deadline.daysLeft} days left`}: ${deadline.title}`,
     html: `
