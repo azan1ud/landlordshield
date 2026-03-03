@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { NewsletterSignup } from '@/components/shared/NewsletterSignup';
 import {
   Shield,
   Calculator,
@@ -85,9 +86,57 @@ const faqs = [
   },
 ];
 
+function CountdownBadge({ label, target }: { label: string; target: string }) {
+  const now = new Date();
+  const deadline = new Date(target);
+  const diff = Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const color = diff <= 30 ? 'bg-red-500/20 text-red-300' : diff <= 90 ? 'bg-amber-500/20 text-amber-300' : 'bg-green-500/20 text-green-300';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold ${color}`}>
+      {label}: <strong>{diff} days</strong>
+    </span>
+  );
+}
+
+const jsonLdSoftwareApp = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'LandlordShield',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  description: 'UK landlord compliance dashboard tracking certificates, Making Tax Digital, Renters\' Rights Act, and EPC ratings.',
+  url: 'https://landlordshield.vercel.app',
+  offers: [
+    { '@type': 'Offer', price: '0', priceCurrency: 'GBP', name: 'Free' },
+    { '@type': 'Offer', price: '9.99', priceCurrency: 'GBP', name: 'Pro' },
+    { '@type': 'Offer', price: '24.99', priceCurrency: 'GBP', name: 'Portfolio' },
+  ],
+};
+
+const jsonLdOrganization = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'LandlordShield',
+  url: 'https://landlordshield.vercel.app',
+  contactPoint: { '@type': 'ContactPoint', email: 'support@avantware.uk', contactType: 'customer support' },
+};
+
+const jsonLdFaq = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSoftwareApp) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrganization) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -99,6 +148,7 @@ export default function LandingPage() {
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-gray-600 hover:text-[#1E3A5F]">Features</a>
               <a href="#pricing" className="text-sm text-gray-600 hover:text-[#1E3A5F]">Pricing</a>
+              <Link href="/blog" className="text-sm text-gray-600 hover:text-[#1E3A5F]">Blog</Link>
               <a href="#faq" className="text-sm text-gray-600 hover:text-[#1E3A5F]">FAQ</a>
               <Link href="/login">
                 <Button variant="ghost" size="sm">Log in</Button>
@@ -112,7 +162,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#1E3A5F] via-[#1E3A5F] to-[#2D4F7A] text-white">
+      <section id="main-content" className="relative overflow-hidden bg-gradient-to-br from-[#1E3A5F] via-[#1E3A5F] to-[#2D4F7A] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 relative">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 text-sm mb-6">
@@ -121,6 +171,10 @@ export default function LandingPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-400"></span>
               </span>
               MTD starts 6 April 2026 — Renters&apos; Rights Act 1 May 2026
+            </div>
+            <div className="flex flex-wrap gap-3 mb-4">
+              <CountdownBadge label="MTD Deadline" target="2026-04-06" />
+              <CountdownBadge label="Section 21 Ends" target="2026-05-01" />
             </div>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
               Three Deadlines.<br />One Dashboard.
@@ -456,6 +510,13 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Newsletter */}
+      <section className="py-12 md:py-16">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          <NewsletterSignup />
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-16 md:py-24">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -490,6 +551,7 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm">
                 <li><a href="#features" className="hover:text-white">Features</a></li>
                 <li><a href="#pricing" className="hover:text-white">Pricing</a></li>
+                <li><Link href="/blog" className="hover:text-white">Blog</Link></li>
                 <li><Link href="/knowledge" className="hover:text-white">Knowledge Base</Link></li>
               </ul>
             </div>
